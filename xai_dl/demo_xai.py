@@ -32,10 +32,7 @@ def run_xai_demonstration():
     print("🌊 RAINWISE AI — EXPLAINABLE DEEP LEARNING (CAPTUM INTEGRATED GRADIENTS)")
     print("=" * 75)
 
-    explainer = ExplainableFloodModel(
-        model_path="DLmodels/flood_dnn.pth",
-        scaler_path="DLmodels/scaler.pkl"
-    )
+    explainer = ExplainableFloodModel()
 
     # 5 Gujarat Municipal Case Studies
     # Features format: [rain_mm, elevation_m, distance_to_river_m, lat, lon]

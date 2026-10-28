@@ -85,11 +85,25 @@ class ExplainableFloodModel:
 
     def __init__(
         self,
-        model_path: str = "DLmodels/flood_dnn.pth",
-        scaler_path: str = "DLmodels/scaler.pkl",
+        model_path: Optional[str] = None,
+        scaler_path: Optional[str] = None,
         device: Optional[torch.device] = None
     ):
         self.device = device or torch.device("cpu")
+        
+        # Default to freshly trained xai_dl/models if available, otherwise DLmodels/
+        if model_path is None:
+            if os.path.exists("xai_dl/models/flood_dnn_xai.pth"):
+                model_path = "xai_dl/models/flood_dnn_xai.pth"
+            else:
+                model_path = "DLmodels/flood_dnn.pth"
+                
+        if scaler_path is None:
+            if os.path.exists("xai_dl/models/scaler_xai.pkl"):
+                scaler_path = "xai_dl/models/scaler_xai.pkl"
+            else:
+                scaler_path = "DLmodels/scaler.pkl"
+                
         self.model_path = model_path
         self.scaler_path = scaler_path
         

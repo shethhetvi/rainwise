@@ -3,42 +3,41 @@ RAINWISE — MUNICIPAL EXPLAINABLE AI AUDIT LOG (CAPTUM INTEGRATED GRADIENTS)
 ========================================================================
 
 MUNICIPAL AUDIT REPORT for Surat (Tapi River Estuary):
-• Flood Risk Probability: 99.8% [CRITICAL (RED ALERT)]
-• Baseline Neutral Risk : 2.7%
-• Primary Risk Driver   : Precipitation (mm) (180.0) contributing +98.1% of total risk divergence.
-• Secondary Risk Driver : Latitude (21.2) contributing +0.0%.
-• Top Protective Buffer : Elevation (m) (13.0) mitigating risk by -0.0168.
-Completeness Convergence Delta: -0.013989
+• Flood Risk Probability: 100.0% [CRITICAL (RED ALERT)]
+• Baseline Neutral Risk : 99.1%
+• Primary Risk Driver   : Precipitation (mm) (180.0) contributing +97.8% of total risk divergence.
+• Secondary Risk Driver : Latitude (21.2) contributing +0.9%.
+• Top Protective Buffer : River Proximity (m) (250.0) mitigating risk by -0.0001.
+Completeness Convergence Delta: 0.002023
 ------------------------------------------------------------------------
 MUNICIPAL AUDIT REPORT for Ahmedabad (Sabarmati Basin):
-• Flood Risk Probability: 98.4% [CRITICAL (RED ALERT)]
-• Baseline Neutral Risk : 2.7%
-• Primary Risk Driver   : Precipitation (mm) (140.0) contributing +97.9% of total risk divergence.
-• Secondary Risk Driver : Latitude (23.0) contributing +0.0%.
-• Top Protective Buffer : Elevation (m) (53.0) mitigating risk by -0.0175.
-Completeness Convergence Delta: -0.021624
+• Flood Risk Probability: 100.0% [CRITICAL (RED ALERT)]
+• Baseline Neutral Risk : 99.1%
+• Primary Risk Driver   : Precipitation (mm) (140.0) contributing +96.7% of total risk divergence.
+• Top Protective Buffer : River Proximity (m) (600.0) mitigating risk by -0.0001.
+Completeness Convergence Delta: -0.002669
 ------------------------------------------------------------------------
 MUNICIPAL AUDIT REPORT for Vadodara (Vishwamitri Plain):
-• Flood Risk Probability: 96.2% [CRITICAL (RED ALERT)]
-• Baseline Neutral Risk : 2.7%
-• Primary Risk Driver   : Precipitation (mm) (125.0) contributing +97.7% of total risk divergence.
+• Flood Risk Probability: 100.0% [CRITICAL (RED ALERT)]
+• Baseline Neutral Risk : 99.1%
+• Primary Risk Driver   : Precipitation (mm) (125.0) contributing +97.4% of total risk divergence.
 • Secondary Risk Driver : Latitude (22.3) contributing +0.0%.
-• Top Protective Buffer : Elevation (m) (39.0) mitigating risk by -0.0194.
-Completeness Convergence Delta: -0.010219
+• Top Protective Buffer : River Proximity (m) (450.0) mitigating risk by -0.0001.
+Completeness Convergence Delta: -0.000579
 ------------------------------------------------------------------------
 MUNICIPAL AUDIT REPORT for Saputara (Dang Hill Station):
 • Flood Risk Probability: 100.0% [CRITICAL (RED ALERT)]
-• Baseline Neutral Risk : 2.7%
-• Primary Risk Driver   : Precipitation (mm) (190.0) contributing +92.3% of total risk divergence.
-• Secondary Risk Driver : Elevation (m) (1000.0) contributing +7.5%.
-• Top Protective Buffer : River Proximity (m) (3500.0) mitigating risk by -0.0013.
-Completeness Convergence Delta: -0.019844
+• Baseline Neutral Risk : 99.1%
+• Primary Risk Driver   : Precipitation (mm) (190.0) contributing +95.6% of total risk divergence.
+• Secondary Risk Driver : Latitude (20.6) contributing +1.7%.
+• Top Protective Buffer : River Proximity (m) (3500.0) mitigating risk by -0.0001.
+Completeness Convergence Delta: -0.002056
 ------------------------------------------------------------------------
 MUNICIPAL AUDIT REPORT for Rajkot (Saurashtra Plateau):
-• Flood Risk Probability: 32.5% [LOW (GREEN / SAFE)]
-• Baseline Neutral Risk : 2.7%
-• Primary Risk Driver   : Precipitation (mm) (35.0) contributing +98.9% of total risk divergence.
-• Secondary Risk Driver : River Proximity (m) (2800.0) contributing +0.6%.
-• Top Protective Buffer : Elevation (m) (132.0) mitigating risk by -0.0013.
-Completeness Convergence Delta: 0.007587
+• Flood Risk Probability: 100.0% [CRITICAL (RED ALERT)]
+• Baseline Neutral Risk : 99.1%
+• Primary Risk Driver   : Precipitation (mm) (35.0) contributing +92.5% of total risk divergence.
+• Secondary Risk Driver : Longitude (70.8) contributing +2.7%.
+• Top Protective Buffer : River Proximity (m) (2800.0) mitigating risk by -0.0004.
+Completeness Convergence Delta: -0.000205
 ------------------------------------------------------------------------
