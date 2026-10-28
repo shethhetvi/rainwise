@@ -21,3 +21,7 @@ tqdm>=4.66.0
 
 # Optional: faster I/O
 pyarrow>=14.0.0      # for .parquet output in preprocessing
+
+# Deep Learning & Explainable AI (XAI)
+torch>=2.0.0
+captum>=0.7.0
