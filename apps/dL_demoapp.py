@@ -89,8 +89,8 @@ st.markdown("### Stage 1: TabTransformer (Rain) → Stage 2: FloodDNN (Risk)")
 def load_dl_resources():
     device = torch.device("cpu")
     
-    # 1. Rainfall Model (TabTransformer) - 6 features, Depth 3
-    rain_model = TabTransformer(input_dim=6, depth=3)
+    # 1. Rainfall Model (TabTransformer) - 7 features, Depth 3
+    rain_model = TabTransformer(input_dim=7, depth=3)
     if os.path.exists("DLmodels/tab_transformer_rainfall.pth"):
         rain_model.load_state_dict(torch.load("DLmodels/tab_transformer_rainfall.pth", map_location=device))
     rain_model.eval()
@@ -173,8 +173,9 @@ with col_r:
             st.error("Error: Model scalers not found.")
         else:
             # --- STAGE 1: RAINFALL (TabTransformer) ---
-            # Features: [elev, dist, lat, lon, pop, rain3]
-            rain_input = [elev_val, dist_val, lat, lon, pop, rain3]
+            # Features: [elev, dist, lat, lon, pop, month, rain3]
+            month = float(datetime.now().month)
+            rain_input = [elev_val, dist_val, lat, lon, pop, month, rain3]
             rain_scaled = rain_scaler.transform([rain_input])
             rain_tensor = torch.tensor(rain_scaled, dtype=torch.float32)
             

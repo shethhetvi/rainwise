@@ -49,8 +49,8 @@ def get_latest_weather(city=None):
     if df.empty:
         return None
 
-    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-    df = df.dropna(subset=["timestamp"])
+    if "timestamp" in df.columns:
+        df = df.dropna(subset=["timestamp"])
 
     if city:
         df = df[df["city"].str.strip() == city.strip()]
@@ -125,8 +125,8 @@ def get_latest_river(city=None):
             return None
 
     df = df.dropna(subset=["city", "river"])
-    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-    df = df.dropna(subset=["timestamp"])
+    if "timestamp" in df.columns:
+        df = df.dropna(subset=["timestamp"])
 
     if city:
         df = df[df["city"].str.strip() == city.strip()]
@@ -162,8 +162,8 @@ def get_latest_satellite(city=None):
         return None
 
     df = df.dropna(subset=["city"])
-    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-    df = df.dropna(subset=["timestamp"])
+    if "timestamp" in df.columns:
+        df = df.dropna(subset=["timestamp"])
 
     if city:
         df = df[df["city"].str.strip() == city.strip()]
