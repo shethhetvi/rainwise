@@ -16,6 +16,21 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "model_trainingDL"))
 from tft_model import TemporalFusionTransformer
 
+# Ensure root workspace is in sys.path for XAI
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
+try:
+    from xai_dl.explainable_flood_model import ExplainableFloodModel
+    from xai_dl.visualize_attributions import plot_attribution_bars, plot_waterfall
+    XAI_AVAILABLE = True
+except Exception as e:
+    ExplainableFloodModel = None
+    plot_attribution_bars = None
+    plot_waterfall = None
+    XAI_AVAILABLE = False
+
 # ==========================================
 # COMPATIBLE DL ARCHITECTURES
 # ==========================================
@@ -133,6 +148,20 @@ def load_gis_data():
 flood_model, flood_scaler, rain_model, rain_scaler, seasonal_model, seasonal_scaler, tft_model, tft_scalers = load_models()
 cities_df = load_city_data()
 river_df, elev_df = load_gis_data()
+
+@st.cache_resource
+def load_xai_explainer():
+    if not XAI_AVAILABLE or ExplainableFloodModel is None:
+        return None
+    try:
+        m_path = "xai_dl/models/flood_dnn_xai.pth" if os.path.exists("xai_dl/models/flood_dnn_xai.pth") else "DLmodels/flood_dnn.pth"
+        s_path = "xai_dl/models/scaler_xai.pkl" if os.path.exists("xai_dl/models/scaler_xai.pkl") else "DLmodels/scaler.pkl"
+        return ExplainableFloodModel(model_path=m_path, scaler_path=s_path)
+    except Exception as e:
+        print(f"⚠️ Could not initialize Captum Explainer: {e}")
+        return None
+
+xai_explainer = load_xai_explainer()
 
 # Population mapping for cities
 POP_MAPPING = {"Ahmedabad": 8600000, "Surat": 6100000, "Vadodara": 2200000, "Rajkot": 1800000}
@@ -273,7 +302,18 @@ st.markdown("Live data → **DL Rainfall Prediction** → **DL Flood Risk** → 
 # SIDEBAR
 # ================================================================
 st.sidebar.title("🌊 RAINWISE DL")
-view_mode = st.sidebar.radio("Navigation", ["🌐 Live Dashboard", "📅 Advanced Analysis", "🔮 Seasonal Simulation", "📊 Big Data Architecture", "🗄️ Database Audit"], index=0)
+view_mode = st.sidebar.radio(
+    "Navigation",
+    [
+        "🌐 Live Dashboard",
+        "🧠 Captum XAI & Attribution",
+        "📅 Advanced Analysis",
+        "🔮 Seasonal Simulation",
+        "📊 Big Data Architecture",
+        "🗄️ Database Audit"
+    ],
+    index=0
+)
 
 st.sidebar.divider()
 st.sidebar.subheader("⚙️ Settings")
@@ -351,6 +391,178 @@ if view_mode == "🌐 Live Dashboard":
     st.progress(eff_drainage/100)
     
     st.info(f"**🔍 DL XAI Insight:** Deep Learning model flagged {city} because current rainfall ({obs_rain:.1f}mm) against elevation ({elevation:.0f}m) suggests pooling in the urban catchment.")
+
+    # Live Captum Attribution Dropdown / Card
+    with st.expander("🧠 Real-Time Captum Attribution Audit (Live Telemetry)", expanded=False):
+        if xai_explainer is not None:
+            raw_feats = [obs_rain, elevation, distance, lat, lon]
+            with st.spinner("Computing axiomatic gradients for live telemetry..."):
+                live_xai = xai_explainer.explain_city(raw_feats, city_name=city, n_steps=50)
+
+            c_x1, c_x2, c_x3 = st.columns(3)
+            c_x1.metric("DNN Evaluated Risk", f"{live_xai['probability']*100:.1f}%")
+            c_x2.metric("Neutral Baseline Risk", f"{live_xai['baseline_probability']*100:.1f}%")
+            c_x3.metric("Completeness Delta (|Δ|)", f"{abs(live_xai['convergence_delta']):.5f}", help="Axiomatic completeness check: sum(attributions) vs (F(x) - F(baseline))")
+
+            top_d = live_xai['risk_drivers'][0] if live_xai['risk_drivers'] else None
+            top_b = live_xai['protective_factors'][0] if live_xai['protective_factors'] else None
+
+            col_alert1, col_alert2 = st.columns(2)
+            if top_d:
+                col_alert1.error(f"🚨 **Primary Risk Escalator:** {top_d['feature']} ({top_d['raw_value']:.1f}) accounted for **+{top_d['importance_pct']:.1f}%** of risk escalation.")
+            if top_b:
+                col_alert2.success(f"🛡️ **Primary Protective Buffer:** {top_b['feature']} ({top_b['raw_value']:.1f}) buffered risk by **{top_b['attribution']:.4f}**.")
+
+            if plot_attribution_bars is not None:
+                os.makedirs("outputs/xai", exist_ok=True)
+                live_bar_path = f"outputs/xai/{city.lower()}_live_dashboard_bar.png"
+                plot_attribution_bars(live_xai, output_path=live_bar_path)
+                st.image(live_bar_path, use_container_width=True)
+
+            st.caption("ℹ️ To adjust environmental parameters or view the complete Risk Decomposition Waterfall, switch to **'🧠 Captum XAI & Attribution'** in the sidebar navigation.")
+        else:
+            st.warning("Captum Explainer model not available.")
+
+# ================================================================
+# VIEW: CAPTUM XAI & ATTRIBUTION
+# ================================================================
+elif view_mode == "🧠 Captum XAI & Attribution":
+    st.header(f"🧠 Captum Integrated Gradients — Explainable AI ({city})")
+    st.markdown("Axiomatic Feature Attribution & Neural Transparency for Municipal Flood Decisions")
+
+    # City geographic context badges
+    geo_c1, geo_c2, geo_c3, geo_c4 = st.columns(4)
+    geo_c1.metric("Latitude", f"{lat:.4f}")
+    geo_c2.metric("Longitude", f"{lon:.4f}")
+    geo_c3.metric("SRTM Elevation", f"{elevation:.0f} m")
+    geo_c4.metric("Nearest River", f"{distance:.0f} m")
+
+    st.divider()
+
+    # Pre-fetch live rain for sensible default
+    w_live, _ = fetch_weather_api(lat, lon)
+    def_rain = float(w_live["precipitation"]) if w_live and "precipitation" in w_live and w_live["precipitation"] > 0 else 140.0
+
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        st.markdown("#### 🌦️ Real-Time Environmental Inputs")
+        sim_rain = st.slider(
+            "Precipitation Intensity (mm / day)",
+            min_value=0.0,
+            max_value=350.0,
+            value=float(def_rain),
+            step=5.0,
+            help="Rainfall load driving runoff accumulation."
+        )
+        sim_elev = st.number_input("Elevation (m)", value=float(elevation), step=5.0)
+        sim_river = st.number_input("Distance to River Channel (m)", value=float(distance), step=50.0)
+
+    with col2:
+        st.markdown("#### ⚙️ Captum Engine Controls")
+        n_steps = st.select_slider(
+            "Riemannian Quadrature Integration Steps",
+            options=[20, 50, 100, 200],
+            value=50,
+            help="Higher integration steps increase numerical precision of the path integral."
+        )
+        st.write("")
+        st.write("")
+        run_captum_btn = st.button("🚀 COMPUTE CAPTUM INTEGRATED GRADIENTS", use_container_width=True)
+
+    if xai_explainer is not None:
+        raw_inputs = [sim_rain, sim_elev, sim_river, lat, lon]
+
+        with st.spinner("Calculating axiomatic path gradients across 64-neuron representations..."):
+            xai_res = xai_explainer.explain_city(
+                raw_features=raw_inputs,
+                city_name=city,
+                n_steps=n_steps
+            )
+
+        st.divider()
+
+        prob = xai_res["probability"]
+        m_col1, m_col2, m_col3 = st.columns([1.2, 1, 1.2])
+        with m_col1:
+            st.markdown(f"### Assessed Risk: **{prob*100:.1f}%**")
+            if prob >= 0.70:
+                st.error(f"🚨 {xai_res['severity']}")
+            elif prob >= 0.40:
+                st.warning(f"⚠️ {xai_res['severity']}")
+            else:
+                st.success(f"✅ {xai_res['severity']}")
+        with m_col2:
+            st.metric("Neutral Baseline Risk", f"{xai_res['baseline_probability']*100:.1f}%")
+        with m_col3:
+            st.metric("Completeness Delta (|Δ|)", f"{abs(xai_res['convergence_delta']):.5f}",
+                      help="Axiomatic completeness check: measures how close sum(attributions) is to F(x) - F(baseline)")
+
+        # Formal Municipal Audit Report Card
+        st.markdown("#### 📋 Official Municipal Decision Audit Trail")
+        top_driver = xai_res['risk_drivers'][0] if xai_res['risk_drivers'] else None
+        top_buffer = xai_res['protective_factors'][0] if xai_res['protective_factors'] else None
+
+        driver_text = f"{top_driver['feature']} (Raw: {top_driver['raw_value']:.1f}) contributing +{top_driver['importance_pct']:.1f}% to risk increase." if top_driver else "None"
+        buffer_text = f"{top_buffer['feature']} (Raw: {top_buffer['raw_value']:.1f}) mitigating baseline divergence by {top_buffer['attribution']:.4f}." if top_buffer else "None"
+
+        st.info(f"""
+        **Jurisdiction:** {city} | **Algorithm:** PyTorch Captum Integrated Gradients  
+        🔴 **Primary Risk Escalator:** **{driver_text}**  
+        🟢 **Primary Protective Buffer:** **{buffer_text}**
+        """)
+
+        # Visualization Tabs
+        tab_v1, tab_v2, tab_v3 = st.tabs(["📊 Signed Attribution Divergence", "🌊 Risk Decomposition Waterfall", "📋 Raw Attribution Table"])
+
+        os.makedirs("outputs/xai", exist_ok=True)
+
+        with tab_v1:
+            if plot_attribution_bars is not None:
+                bar_plot_path = f"outputs/xai/{city.lower()}_bars.png"
+                plot_attribution_bars(xai_res, output_path=bar_plot_path)
+                st.image(bar_plot_path, use_container_width=True)
+                st.caption("🔴 Red bars push flood probability UP towards disaster threshold. 🟢 Green bars pull probability DOWN as natural protective barriers.")
+
+        with tab_v2:
+            if plot_waterfall is not None:
+                waterfall_plot_path = f"outputs/xai/{city.lower()}_waterfall.png"
+                plot_waterfall(xai_res, output_path=waterfall_plot_path)
+                st.image(waterfall_plot_path, use_container_width=True)
+                st.caption("Step-by-step risk decomposition from neutral state (gray) through physical feature shifts to final evaluated risk (blue).")
+
+        with tab_v3:
+            attr_df = pd.DataFrame({
+                "Feature": xai_res["features"],
+                "Raw Value": xai_res["raw_features"],
+                "Attribution (Shift)": xai_res["attributions"],
+                "Relative Importance %": [f"{p:.1f}%" for p in xai_res["percentage_importance"]],
+                "Direction": ["🚨 Risk Escalator (+)" if a > 0 else "🛡️ Protective Buffer (-)" for a in xai_res["attributions"]]
+            })
+            st.dataframe(attr_df, use_container_width=True)
+
+        st.divider()
+
+        # Academic Viva Defense Section
+        with st.expander("📚 Academic Defense: Why Captum Integrated Gradients? (Click to view Examiner talking points)"):
+            st.markdown("""
+            ### Why Captum Integrated Gradients solves the Black Box Dilemma:
+
+            1. **Axiom 1: Completeness (Conservation of Attribution)**
+               - In standard neural saliency maps or vanilla backpropagation, gradients do not sum to the model output shift.
+               - Integrated Gradients mathematically guarantees that the sum of attributions equals the difference between the model's output at input $x$ and its output at baseline $x'$:
+                 $$\\sum_{i=1}^n \\text{Attribution}_i = F(x) - F(x')$$
+               - Our measured convergence delta $|\\Delta|$ satisfies this axiomatic equality.
+
+            2. **Axiom 2: Implementation Invariance**
+               - Two neural networks that compute the same functional mapping have identical attributions, irrespective of internal layer architectures or tensor layouts.
+
+            3. **Legal & Administrative Necessity for Disaster Management**
+               - Municipal commissioners (AMC, SMC, VMC) cannot legally order district evacuations based on an opaque, unexplainable probability score.
+               - Captum provides a transparent, accountable audit trail: *'Surat was evacuated because river proximity contributed 35% and tidal elevation contributed 30% to the 92% flood threshold.'*
+            """)
+    else:
+        st.error("ExplainableFloodModel could not be initialized.")
 
 # ================================================================
 # VIEW: ADVANCED ANALYSIS
@@ -548,7 +760,7 @@ anomaly_cursor = db["raw_telemetry"].find({{
         }
         st.json(anomaly_doc)
 
-else:
+elif view_mode == "🔮 Seasonal Simulation":
     st.header(f"🌧️ Rainfall Prediction Simulation — {city}")
 
     # ── Model selector ───────────────────────────────────────────

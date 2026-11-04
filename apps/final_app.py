@@ -564,6 +564,8 @@ if view_mode == "🌐 Live Dashboard":
     **🔍 Explainable AI (XAI) Insight:** The XGBoost model has flagged **{city}** for high risk not just 
     because of rainfall ({satellite_rain:.1f}mm), but because the **{watershed_id}** catchment reached a 
     saturation state where local drainage ({eff_drainage}%) can no longer evacuate water effectively.
+    
+    *(Note: For Deep Learning Axiomatic Attribution via PyTorch Captum Integrated Gradients, switch to the DL Dashboard: `streamlit run apps/dlfinal_app.py`)*
     """)
 
     # MAP

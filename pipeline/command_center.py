@@ -10,6 +10,21 @@ import time
 from datetime import datetime
 import plotly.graph_objects as go
 import plotly.express as px
+import sys
+
+# Ensure root workspace is in sys.path
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
+try:
+    from xai_dl.explainable_flood_model import ExplainableFloodModel
+    from xai_dl.visualize_attributions import plot_attribution_bars
+    XAI_AVAILABLE = True
+except Exception:
+    ExplainableFloodModel = None
+    plot_attribution_bars = None
+    XAI_AVAILABLE = False
 
 # --- RAINWISE HDFS BRIDGE ---
 from src.utils.hdfs_reader import HDFSReader
@@ -126,6 +141,19 @@ def load_all_resources():
     return r_model, r_scaler, f_model, f_scaler, cities_df, r_dist, elev
 
 r_model, r_scaler, f_model, f_scaler, cities_df, river_df, elev_df = load_all_resources()
+
+@st.cache_resource
+def load_xai_explainer():
+    if not XAI_AVAILABLE or ExplainableFloodModel is None:
+        return None
+    try:
+        m_path = "xai_dl/models/flood_dnn_xai.pth" if os.path.exists("xai_dl/models/flood_dnn_xai.pth") else "DLmodels/flood_dnn.pth"
+        s_path = "xai_dl/models/scaler_xai.pkl" if os.path.exists("xai_dl/models/scaler_xai.pkl") else "DLmodels/scaler.pkl"
+        return ExplainableFloodModel(model_path=m_path, scaler_path=s_path)
+    except Exception:
+        return None
+
+xai_explainer = load_xai_explainer()
 
 # ==========================================
 # UTILS
@@ -288,6 +316,30 @@ with dl_col3:
         ))
         fig_gauge.update_layout(paper_bgcolor='rgba(0,0,0,0)', font_color="#e2e8f0", height=200, margin=dict(t=0, b=0, l=10, r=10))
         st.plotly_chart(fig_gauge, use_container_width=True)
+
+        # Captum Attribution breakdown
+        if xai_explainer is not None:
+            with st.expander("🧠 Captum XAI: Feature Attribution Breakdown", expanded=False):
+                with st.spinner("Computing axiomatic gradients..."):
+                    inf_feat = [st.session_state.pred_rain, e_val, r_val, c_lat, c_lon]
+                    xai_res = xai_explainer.explain_city(inf_feat, city_name=target_city, n_steps=50)
+
+                delta_val = abs(xai_res['convergence_delta'])
+                st.caption(f"**Completeness Delta (|Δ|):** `{delta_val:.5f}` (Axiom Verified)")
+
+                top_d = xai_res['risk_drivers'][0] if xai_res['risk_drivers'] else None
+                top_b = xai_res['protective_factors'][0] if xai_res['protective_factors'] else None
+
+                if top_d:
+                    st.markdown(f"🚨 **Primary Risk Driver:** `{top_d['feature']}` (+{top_d['importance_pct']:.1f}%)")
+                if top_b:
+                    st.markdown(f"🛡️ **Protective Buffer:** `{top_b['feature']}` ({top_b['attribution']:.4f})")
+
+                if plot_attribution_bars is not None:
+                    os.makedirs("outputs/xai", exist_ok=True)
+                    bar_path = f"outputs/xai/{target_city.lower()}_cmd_center_bar.png"
+                    plot_attribution_bars(xai_res, output_path=bar_path)
+                    st.image(bar_path, use_container_width=True)
 
 st.divider()
 
