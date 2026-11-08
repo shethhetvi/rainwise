@@ -1,0 +1,6 @@
+Battery,Count,Std_Violation_Rate_Pct,PINN_Violation_Rate_Pct,Std_Max_Excess_mm,PINN_Max_Excess_mm,Std_MSE,PINN_MSE
+1. Bone-Dry Soil / Infiltration Blockade,100,33.0,0.0,0.31144505739212036,0.0,0.007487895933437814,0.0
+2. Zero Rain / False Runoff Hallucination,100,42.0,0.0,0.9014294743537903,0.0,0.047943914450889184,0.0
+3. High Evapotranspiration Dominance,100,71.0,0.0,0.5191391706466675,0.0,0.05582326857293039,0.0
+4. Torrential Cloudburst Over-Extrapolation,100,0.0,0.0,0.0,0.0,208.71619714873813,13.822097711005055
+5. High Topographic Slope / Rapid Drainage,100,0.0,0.0,0.0,0.0,19.391430842354776,1.5583123701536568

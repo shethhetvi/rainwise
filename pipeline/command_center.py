@@ -339,7 +339,7 @@ with dl_col3:
                     os.makedirs("outputs/xai", exist_ok=True)
                     bar_path = f"outputs/xai/{target_city.lower()}_cmd_center_bar.png"
                     plot_attribution_bars(xai_res, output_path=bar_path)
-                    st.image(bar_path, use_container_width=True)
+                    st.image(bar_path, use_column_width=True)
 
 st.divider()
 
