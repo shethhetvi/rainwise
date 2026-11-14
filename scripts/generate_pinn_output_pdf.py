@@ -40,6 +40,7 @@ def build_html_report():
     img_curves = img_to_base64(os.path.join(BASE_DIR, "outputs/pinn/pinn_training_curves.png"))
     img_alert_active = img_to_base64(os.path.join(BASE_DIR, 'outputs/screenshots/01_ml_flood_alert_active.png'))
     img_deluge = img_to_base64(os.path.join(BASE_DIR, 'outputs/screenshots/04_pinn_deluge_disaster.png'))
+    img_vadodara_2024 = img_to_base64(os.path.join(BASE_DIR, 'outputs/screenshots/01_date_vadodara_2024_deluge.png'))
 
 
     template = """<!DOCTYPE html>
@@ -343,8 +344,8 @@ Both architectures were trained side-by-side on 2,400 Gujarat catchment scenario
 </div>
 
 <div class="screenshot-box">
-    <img src="__IMG_ALERT_ACTIVE__" style="max-height: 230px;">
-    <div class="screenshot-caption">Figure 3b: Active Disaster Mode — Simulated Monsoon Deluge (65.0 mm) triggers Critical Red Flood Alert (100.0% Risk).</div>
+    <img src="__IMG_VADODARA_2024__" style="max-height: 250px;">
+    <div class="screenshot-caption">Figure 3c: Date & Year Temporal Retrieval — 27-August-2024 Vadodara Mega Deluge. Real historical rainfall (285.0 mm), Vishwamitri River discharge (185.0 m³/s, Above Danger) triggered immediate 100.0% Critical Flood Alert.</div>
 </div>
 
 <h3>Tab 2: Cascading Two-Stage Deep Learning Pipeline</h3>
@@ -481,6 +482,7 @@ Both architectures were trained side-by-side on 2,400 Gujarat catchment scenario
     template = template.replace("__IMG_CURVES__", img_curves)
     template = template.replace("__IMG_ALERT_ACTIVE__", img_alert_active)
     template = template.replace("__IMG_DELUGE__", img_deluge)
+    template = template.replace("__IMG_VADODARA_2024__", img_vadodara_2024)
     return template
 
 
