@@ -44,6 +44,8 @@ from model_trainingDL.tft_model import TemporalFusionTransformer
 from xai_dl.explainable_flood_model import ExplainableFloodModel, FloodDNN
 from xai_dl.visualize_attributions import plot_attribution_bars, plot_waterfall
 from pinn_hydrology.pinn_water_balance import PINNHydrologyEngine, compute_hydrological_budget
+from gnn_river.river_gnn_model import RiverGNNEngine
+from convlstm_nowcasting.convlstm_model import ConvLSTMEngine, dbz_to_rainfall_rate
 from datetime import datetime, date
 
 # ==============================================================================
@@ -202,12 +204,24 @@ def load_all_models():
         device=device
     )
 
-    # 7. Temporal Hydrology & Disaster Archive Engine
+    # 7. River-Network Graph Neural Network (Pillar 3: GNN) Engine
+    river_gnn_engine = RiverGNNEngine(
+        model_path="gnn_river/models/river_gnn.pth",
+        device=device
+    )
+
+    # 8. ConvLSTM Radar Nowcasting (Pillar 4: ConvLSTM) Engine
+    convlstm_engine = ConvLSTMEngine(
+        model_path="convlstm_nowcasting/models/convlstm_nowcaster.pth",
+        device=device
+    )
+
+    # 9. Temporal Hydrology & Disaster Archive Engine
     temporal_engine = GujaratTemporalEngine()
 
-    return ml_model, (tab_trans, tab_scaler), xai_explainer, (tft_model, tft_scalers), pinn_engine, temporal_engine, cities_df, river_df, elev_df
+    return ml_model, (tab_trans, tab_scaler), xai_explainer, (tft_model, tft_scalers), pinn_engine, river_gnn_engine, convlstm_engine, temporal_engine, cities_df, river_df, elev_df
 
-ml_model, (tab_trans, tab_scaler), xai_explainer, (tft_model, tft_scalers), pinn_engine, temporal_engine, cities_df, river_df, elev_df = load_all_models()
+ml_model, (tab_trans, tab_scaler), xai_explainer, (tft_model, tft_scalers), pinn_engine, river_gnn_engine, convlstm_engine, temporal_engine, cities_df, river_df, elev_df = load_all_models()
 
 def find_nearest_gis(df, lat, lon, col):
     d = (df["lat"] - lat)**2 + (df["lon"] - lon)**2
@@ -303,6 +317,17 @@ with st.sidebar:
     st.caption(f"🌊 River Gauges: 🟢 Online ({temporal_data['river_name']})")
     st.caption(f"⚡ Meteorology: 🟢 Synchronized ({temporal_data['temperature_C']}°C | {temporal_data['humidity_percent']}% RH)")
 
+    if os.path.exists("outputs/RAINWISE_Advanced_Deep_Learning_Pillars_Report.pdf"):
+        st.divider()
+        with open("outputs/RAINWISE_Advanced_Deep_Learning_Pillars_Report.pdf", "rb") as pdf_f:
+            st.download_button(
+                "📥 Download Executive PDF Report",
+                pdf_f,
+                file_name="RAINWISE_Advanced_Deep_Learning_Pillars_Report.pdf",
+                mime="application/pdf",
+                help="Download publication-grade executive report with all 4 deep learning pillars and benchmark diagnostics."
+            )
+
 # Extract key date-calibrated hydrological variables
 sat_rain = float(temporal_data["precipitation_mm"])
 rain_3day = float(temporal_data["rain_3day_mm"])
@@ -316,11 +341,13 @@ et_mm = float(temporal_data["et_mm"])
 # ==============================================================================
 # 4. MAIN TABS INTERFACE
 # ==============================================================================
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "🛰️ Real-Time Telemetry & ML Alert",
     "🌊 Cascading DL Pipeline (TabTransformer ➔ FloodDNN)",
-    "🧠 Explainable AI (Captum Integrated Gradients)",
-    "⚖️ PINN Physics Verification (Conservation of Mass)",
+    "🧠 Pillar 1: Captum XAI (Axiomatic Attributions)",
+    "⚖️ Pillar 2: PINN (Physics-Informed Water Balance)",
+    "🌐 Pillar 3: River-Network GNN (Downstream Flow Routing)",
+    "🛰️ Pillar 4: ConvLSTM (Spatio-Temporal Radar Nowcasting)",
     "🔮 Spatio-Temporal Forecasting (TFT Quantiles)",
     "📍 Gujarat Municipal Benchmarks"
 ])
@@ -687,9 +714,327 @@ with tab4:
         st.download_button("📥 Download Formal PINN Audit Report (Markdown)", audit_md, file_name="pinn_audit_summary.md", mime="text/markdown")
 
 # ──────────────────────────────────────────────────────────────────────────────
-# TAB 5: SPATIO-TEMPORAL FORECASTING (TFT QUANTILES)
+# TAB 5: PILLAR 3: RIVER-NETWORK GNN (DOWNSTREAM FLOOD ROUTING & DAM PROPAGATION)
 # ──────────────────────────────────────────────────────────────────────────────
 with tab5:
+    st.markdown("### 🌐 Pillar 3: River-Network Graph Neural Network (Downstream Flow Routing)")
+    st.caption("Solves the Single-City Blindness Gap: Models river corridors as directed spatio-temporal graphs with channel attenuation and physical transit lags (ST-GCN).")
+
+    st.markdown("""
+    <div class="card-box" style="margin-bottom: 20px;">
+        <b>🌊 Why Single-City Models Fail (The Surat 2006 Paradox):</b><br>
+        Traditional models evaluate flood risk purely from local rainfall ($R_{\\text{local}}$).
+        In Gujarat, water flows <b>DOWNSTREAM along major river corridors</b>:<br>
+        • <b>Tapi Basin:</b> Ukai Dam ➔ Mandvi Gauge ➔ Kamrej Weir ➔ <b>Surat City</b> ➔ Dumas Estuary<br>
+        • <b>Vishwamitri Basin:</b> Pavagadh Ridge ➔ Ajwa Reservoir ➔ Pratappura ➔ <b>Vadodara City</b> ➔ Padra ➔ Dhadhar Estuary<br>
+        • <b>Sabarmati Basin:</b> Dharoi Dam ➔ Himmatnagar ➔ Gandhinagar ➔ <b>Ahmedabad City</b> ➔ Vasna Barrage<br>
+        • <b>Narmada Basin:</b> Sardar Sarovar Dam ➔ Kevadiya ➔ Rajpipla ➔ <b>Bharuch City</b> ➔ Dahej Estuary<br>
+        <i>When Ukai Dam releases 900,000 cusecs, Surat floods catastrophically even with 0 mm local rain!</i>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_g1, col_g2 = st.columns([1, 1])
+
+    with col_g1:
+        st.markdown("#### ⚙️ River Basin & Dam Discharge Controls")
+        basin_choice = st.selectbox(
+            "Select River Corridor Basin",
+            [
+                "Tapi Basin (Ukai Dam ➔ Surat)",
+                "Vishwamitri Basin (Ajwa Reservoir ➔ Vadodara)",
+                "Sabarmati Basin (Dharoi Dam ➔ Ahmedabad)",
+                "Narmada Basin (Sardar Sarovar Dam ➔ Bharuch)"
+            ],
+            index=0
+        )
+
+        if "Tapi" in basin_choice:
+            gnn_dam = "Ukai Dam"
+            gnn_city = "Surat"
+            def_release = 900000.0 if "2006" in str(active_date.year) else 450000.0
+            max_release = 1200000.0
+            step_release = 25000.0
+        elif "Vishwamitri" in basin_choice:
+            gnn_dam = "Ajwa Reservoir"
+            gnn_city = "Vadodara"
+            def_release = 120000.0 if "2024" in str(active_date.year) else 55000.0
+            max_release = 180000.0
+            step_release = 5000.0
+        elif "Sabarmati" in basin_choice:
+            gnn_dam = "Dharoi Dam"
+            gnn_city = "Ahmedabad"
+            def_release = 350000.0
+            max_release = 650000.0
+            step_release = 10000.0
+        else:
+            gnn_dam = "Sardar Sarovar Dam"
+            gnn_city = "Bharuch"
+            def_release = 800000.0
+            max_release = 2000000.0
+            step_release = 50000.0
+
+        sim_release = st.slider(f"Upstream Discharge from {gnn_dam} (cusecs)", 0.0, float(max_release), float(def_release), step=float(step_release))
+        sim_local_rain = st.slider(f"Local Rainfall at {gnn_city} (mm/day)", 0.0, 300.0, float(sat_rain if sat_rain > 0 else 12.0), step=2.0)
+
+    with col_g2:
+        st.markdown("#### 📡 Ground Truth & Preset Disaster Scenarios")
+        st.caption("Quickly test historical emergency dam release events:")
+        p_c1, p_c2 = st.columns(2)
+        if p_c1.button("🔴 Surat 2006 (Ukai 9L Cusecs)"):
+            st.session_state["gnn_preset"] = ("Surat", "Ukai Dam", 900000.0, 12.0)
+        if p_c2.button("🔴 Vadodara 2024 (Ajwa Deluge)"):
+            st.session_state["gnn_preset"] = ("Vadodara", "Ajwa Reservoir", 120000.0, 45.0)
+
+        # Check if preset applied
+        if "gnn_preset" in st.session_state:
+            p_city, p_dam, p_rel, p_rn = st.session_state["gnn_preset"]
+            if p_city == gnn_city:
+                sim_release = p_rel
+                sim_local_rain = p_rn
+
+        st.info(f"Currently simulating: **{gnn_dam}** releasing **{sim_release:,.0f} cusecs** into **{gnn_city}** with **{sim_local_rain:.1f} mm** local rain.")
+
+    # Run simulation
+    sim_res = river_gnn_engine.simulate_basin_event(
+        target_city=gnn_city,
+        dam_name=gnn_dam,
+        dam_release_cusecs=sim_release,
+        local_rain_mm=sim_local_rain
+    )
+
+    st.divider()
+    st.markdown(f"#### 🔍 Side-by-Side Model Parity: **{gnn_city}** ({sim_res['basin']} Basin)")
+
+    col_iso, col_gnn = st.columns(2)
+
+    with col_iso:
+        st.markdown("""
+        <div style="border: 2px solid #ef4444; border-radius: 12px; padding: 18px; background: rgba(239,68,68,0.06);">
+            <h4 style="color: #ef4444; margin-top:0;">❌ Isolated Single-City Model</h4>
+            <p style="color: #94a3b8; font-size: 0.88rem;">Evaluates ONLY local rainfall. Blind to upstream river graph connections.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.write("")
+        iso_risk_pct = sim_res["isolated_model_risk"] * 100.0
+        c_i1, c_i2 = st.columns(2)
+        c_i1.metric("Local Input Rain", f"{sim_local_rain:.1f} mm")
+        c_i2.metric("Predicted Inundation Risk", f"{iso_risk_pct:.1f}%")
+
+        if sim_release > 50000.0 and iso_risk_pct < 50.0:
+            st.markdown(f"""
+            <div class="badge-red" style="width:100%; text-align:center; margin-top:8px;">
+                🚨 CATASTROPHIC FALSE NEGATIVE (MODEL BLIND!)
+            </div>
+            <div style="background: rgba(239,68,68,0.15); border: 1px solid #ef4444; border-radius: 8px; padding: 12px; margin-top: 10px;">
+                <b>The Single-City Failure:</b><br>
+                Model outputs <b>{iso_risk_pct:.1f}% ("ALL CLEAR")</b> because local rain is only {sim_local_rain:.1f} mm.<br>
+                • <b>Unmonitored Hazard:</b> Misses <b>{sim_release:,.0f} cusecs</b> surging downstream from {gnn_dam}!<br>
+                • <b>Operational Failure:</b> Causes zero evacuation sirens to fire, leading to mass civilian entrapment.
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div class="badge-green" style="width:100%; text-align:center; margin-top:8px;">
+                ✅ Within Expected Local Envelope
+            </div>
+            """, unsafe_allow_html=True)
+
+    with col_gnn:
+        st.markdown("""
+        <div style="border: 2px solid #10b981; border-radius: 12px; padding: 18px; background: rgba(16,185,129,0.06);">
+            <h4 style="color: #10b981; margin-top:0;">🛡️ RAINWISE River-Network GNN</h4>
+            <p style="color: #94a3b8; font-size: 0.88rem;">Directed message passing along river channel edges with physical transit lags.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.write("")
+        gnn_risk_pct = sim_res["gnn_flood_risk"] * 100.0
+        c_g1, c_g2, c_g3 = st.columns(3)
+        c_g1.metric("Predicted Flood Risk", f"{gnn_risk_pct:.1f}%")
+        c_g2.metric("Downstream Surge", f"{sim_res['gnn_surge_cusecs']:,.0f} cusecs")
+        c_g3.metric("Advance Lead Time", f"{sim_res['gnn_lead_time_hrs']:.1f} Hours")
+
+        if gnn_risk_pct >= 50.0:
+            st.markdown(f"""
+            <div class="badge-red" style="width:100%; text-align:center; margin-top:8px;">
+                🚨 CRITICAL DOWNSTREAM FLOOD SURGE ALERT!
+            </div>
+            <div style="background: rgba(16,185,129,0.15); border: 1px solid #10b981; border-radius: 8px; padding: 12px; margin-top: 10px;">
+                <b>Actionable Civic Evacuation Lead Time:</b><br>
+                Water released at {gnn_dam} is propagating down <b>{sim_res['total_dist_km']:.0f} km</b> of channel corridor.<br>
+                • <b>Transit Window:</b> Municipal authorities have <b>{sim_res['gnn_lead_time_hrs']:.1f} Hours</b> advance warning.<br>
+                • <b>Routing Pathway:</b> {' ➔ '.join(sim_res['upstream_path'])}.
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div class="badge-green" style="width:100%; text-align:center; margin-top:8px;">
+                ✅ River Channel Flow Within Normal Carrying Capacity
+            </div>
+            """, unsafe_allow_html=True)
+
+    # Topological Station Status Table
+    st.divider()
+    st.markdown(f"#### 🗺️ {sim_res['basin']} River Corridor Multi-Station Telemetry")
+    basin_nodes = [n for n in sim_res["all_nodes"] if n["basin"] == sim_res["basin"]]
+    b_df = pd.DataFrame(basin_nodes)
+    st.dataframe(
+        b_df.rename(columns={
+            "name": "Station / Gauge / City",
+            "type": "Hydrological Facility Type",
+            "risk": "Inundation Risk Probability",
+            "surge_cusecs": "Estimated Flow Volume (cusecs)"
+        }),
+        use_container_width=True
+    )
+
+    # Diagnostic Benchmark Audit Section
+    st.divider()
+    st.markdown("#### 📊 Quantitative GNN Benchmark & Historical Parity Audit")
+    with st.expander("📈 View Publication Diagnostics (GNN Routing Benchmark & Convergence Curves)", expanded=True):
+        cg1, cg2 = st.columns(2)
+        with cg1:
+            if os.path.exists("outputs/gnn/river_gnn_routing_benchmark.png"):
+                st.image("outputs/gnn/river_gnn_routing_benchmark.png", caption="Historical Benchmark: Single-City Blindness vs. GNN Downstream Propagation", use_column_width=True)
+        with cg2:
+            if os.path.exists("outputs/gnn/river_gnn_training_curves.png"):
+                st.image("outputs/gnn/river_gnn_training_curves.png", caption="River-Network GNN Multi-Task Loss Convergence Across Epochs", use_column_width=True)
+
+    if os.path.exists("outputs/gnn/gnn_audit_summary.md"):
+        with open("outputs/gnn/gnn_audit_summary.md", "r") as f:
+            gnn_md = f.read()
+        st.download_button("📥 Download Formal River GNN Audit Report (Markdown)", gnn_md, file_name="gnn_audit_summary.md", mime="text/markdown")
+
+# ──────────────────────────────────────────────────────────────────────────────
+# TAB 6: PILLAR 4: CONVLSTM (SPATIO-TEMPORAL RADAR & CLOUD NOWCASTING)
+# ──────────────────────────────────────────────────────────────────────────────
+with tab6:
+    st.markdown("### 🛰️ Pillar 4: ConvLSTM Radar & Cloud Spatio-Temporal Nowcaster")
+    st.caption("Solves the Point-Station Fallacy: Replaces static scalar rain numbers with 2D convective radar grid nowcasting via Convolutional LSTM gates (Shi et al., 2015).")
+
+    st.markdown("""
+    <div class="card-box" style="margin-bottom: 20px;">
+        <b>🛰️ Atmospheric Physics & Spatio-Temporal Convection:</b><br>
+        Standard hydrological models ingest rainfall as a single point gauge measurement ($R \\in \\mathbb{R}$).
+        In reality, storms are <b>dynamic 2D convective cloud masses</b> translating across the Arabian Sea into Gujarat:<br>
+        $$\\frac{\\partial Z}{\\partial t} + \\mathbf{u} \\cdot \\nabla Z = S(Z)$$
+        • <b>Advective Dynamics:</b> ConvLSTM replaces matrix multiplications with 2D spatial convolutions ($3\\times 3$ filters), learning storm velocity vectors $\\mathbf{u} = (u, v)$ and convective growth/decay $S(Z)$.<br>
+        • <b>Marshall-Palmer Hydrodynamic Inversion:</b> Predicts Doppler radar reflectivity factor $Z$ (dBZ), inverted to rainfall intensity via $Z = 200 \\cdot R^{1.6} \\implies R = \\left(\\frac{10^{Z/10}}{200}\\right)^{1/1.6} \\text{ mm/hr}$.
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_c1, col_c2 = st.columns([1, 1])
+
+    with col_c1:
+        st.markdown("#### 🌦️ Convective Storm Scenario")
+        storm_scenario = st.selectbox(
+            "Select Gujarat Atmospheric Storm System",
+            [
+                "Monsoon Front Inland Advance (Arabian Sea ➔ South Gujarat)",
+                "Cyclone Biparjoy Spiral Vortex (Kutch / Saurashtra Landfall)",
+                "Urban Convective Cloudburst (Rapid Vadodara/Surat Intensification)"
+            ],
+            index=0
+        )
+        sc_map = {
+            "Monsoon Front Inland Advance (Arabian Sea ➔ South Gujarat)": "monsoon_front",
+            "Cyclone Biparjoy Spiral Vortex (Kutch / Saurashtra Landfall)": "biparjoy_cyclone",
+            "Urban Convective Cloudburst (Rapid Vadodara/Surat Intensification)": "cloudburst_cell"
+        }
+        active_sc = sc_map[storm_scenario]
+
+    with col_c2:
+        st.markdown("#### ⏱️ Operational Forecast Horizon")
+        lead_step_label = st.select_slider(
+            "Prediction Lead Time Horizon",
+            options=["+1 Hour Future", "+2 Hours Future", "+3 Hours Future", "+6 Hours Future"],
+            value="+2 Hours Future"
+        )
+        step_idx_map = {"+1 Hour Future": 0, "+2 Hours Future": 1, "+3 Hours Future": 2, "+6 Hours Future": 3}
+        lead_idx = step_idx_map[lead_step_label]
+
+    # Run ConvLSTM inference
+    past_dbz, gt_future_dbz = convlstm_engine.generate_synthetic_storm_sequence(scenario_type=active_sc)
+    nowcast_res = convlstm_engine.predict_nowcast(past_dbz)
+
+    st.divider()
+    st.markdown(f"#### 🛰️ Spatio-Temporal Radar Reflectivity Comparison at **{lead_step_label}**")
+
+    # 3-Column Heatmap View
+    c_hm1, c_hm2, c_hm3 = st.columns(3)
+
+    gt_f = gt_future_dbz[lead_idx]
+    pred_f = nowcast_res["pred_dbz"][lead_idx]
+    pers_f = nowcast_res["persistence_dbz"][lead_idx]
+
+    # Convert to mm/hr
+    gt_rr = dbz_to_rainfall_rate(gt_f)
+    pred_rr = dbz_to_rainfall_rate(pred_f)
+    pers_rr = dbz_to_rainfall_rate(pers_f)
+
+    with c_hm1:
+        st.markdown("<h5 style='color:#10b981; text-align:center;'>🟢 Ground Truth Observation</h5>", unsafe_allow_html=True)
+        fig_gt, ax_gt = plt.subplots(figsize=(4, 4), dpi=150)
+        im1 = ax_gt.imshow(gt_f, cmap="turbo", vmin=0, vmax=65, origin="lower")
+        ax_gt.set_title(f"True Radar Field ({lead_step_label})", fontsize=10, fontweight="bold")
+        ax_gt.axis("off")
+        st.pyplot(fig_gt)
+        st.caption(f"Peak: **{np.max(gt_f):.1f} dBZ** | Max Rain: **{np.max(gt_rr):.1f} mm/hr**")
+
+    with c_hm2:
+        st.markdown("<h5 style='color:#0284c7; text-align:center;'>🔵 RAINWISE ConvLSTM (Pillar 4)</h5>", unsafe_allow_html=True)
+        fig_pred, ax_pred = plt.subplots(figsize=(4, 4), dpi=150)
+        im2 = ax_pred.imshow(pred_f, cmap="turbo", vmin=0, vmax=65, origin="lower")
+        ax_pred.set_title(f"ConvLSTM Predicted ({lead_step_label})", fontsize=10, fontweight="bold")
+        ax_pred.axis("off")
+        st.pyplot(fig_pred)
+        st.caption(f"Peak: **{np.max(pred_f):.1f} dBZ** | Max Rain: **{np.max(pred_rr):.1f} mm/hr**")
+
+    with c_hm3:
+        st.markdown("<h5 style='color:#ef4444; text-align:center;'>🔴 Persistence Baseline (Static)</h5>", unsafe_allow_html=True)
+        fig_pers, ax_pers = plt.subplots(figsize=(4, 4), dpi=150)
+        im3 = ax_pers.imshow(pers_f, cmap="turbo", vmin=0, vmax=65, origin="lower")
+        ax_pers.set_title(f"Persistence Frozen ({lead_step_label})", fontsize=10, fontweight="bold")
+        ax_pers.axis("off")
+        st.pyplot(fig_pers)
+        st.caption(f"Peak: **{np.max(pers_f):.1f} dBZ** | Max Rain: **{np.max(pers_rr):.1f} mm/hr**")
+
+    # City-by-City Precipitation Nowcast Table
+    st.divider()
+    st.markdown("#### 🏙️ Gujarat Municipal Nowcast (Marshall-Palmer Rainfall Rates)")
+    city_nowcast_rows = []
+    for c_name, c_data in nowcast_res["city_forecasts"].items():
+        city_nowcast_rows.append({
+            "City": c_name,
+            "Current Rain Rate (mm/hr)": f"{c_data['current_rain_mmhr']:.1f}",
+            "+1h Rain (mm/hr)": f"{c_data['forecast_rain_mmhr'][0]:.1f}",
+            "+2h Rain (mm/hr)": f"{c_data['forecast_rain_mmhr'][1]:.1f}",
+            "+3h Rain (mm/hr)": f"{c_data['forecast_rain_mmhr'][2]:.1f}",
+            "+6h Rain (mm/hr)": f"{c_data['forecast_rain_mmhr'][3]:.1f}",
+            "+2h Reflectivity": f"{c_data['forecast_dbz'][1]:.1f} dBZ"
+        })
+    st.dataframe(pd.DataFrame(city_nowcast_rows), use_container_width=True)
+
+    # Diagnostic Benchmark Section
+    st.divider()
+    st.markdown("#### 📊 Quantitative ConvLSTM Spatio-Temporal Benchmark")
+    with st.expander("📈 View 16-Panel Spatio-Temporal Benchmark Grid & Convergence Curves", expanded=True):
+        cc1, cc2 = st.columns(2)
+        with cc1:
+            if os.path.exists("outputs/convlstm/convlstm_nowcasting_grid.png"):
+                st.image("outputs/convlstm/convlstm_nowcasting_grid.png", caption="16-Panel Spatio-Temporal Radar Benchmark (ConvLSTM vs. Persistence Baseline)", use_column_width=True)
+        with cc2:
+            if os.path.exists("outputs/convlstm/convlstm_training_curves.png"):
+                st.image("outputs/convlstm/convlstm_training_curves.png", caption="ConvLSTM Training & Validation Loss Across Epochs", use_column_width=True)
+
+    if os.path.exists("outputs/convlstm/convlstm_audit_summary.md"):
+        with open("outputs/convlstm/convlstm_audit_summary.md", "r") as f:
+            conv_md = f.read()
+        st.download_button("📥 Download Formal ConvLSTM Audit Report (Markdown)", conv_md, file_name="convlstm_audit_summary.md", mime="text/markdown")
+
+# ──────────────────────────────────────────────────────────────────────────────
+# TAB 7: SPATIO-TEMPORAL FORECASTING (TFT QUANTILES)
+# ──────────────────────────────────────────────────────────────────────────────
+with tab7:
     st.markdown("### 🔮 Spatio-Temporal Forecasting via Temporal Fusion Transformer (TFT)")
     st.caption("Multi-horizon uncertainty forecasting with Variable Selection Networks & Multi-Head Temporal Attention (Lim et al., 2021)")
 
@@ -766,9 +1111,9 @@ with tab5:
                 st.pyplot(fig_q)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# TAB 6: GUJARAT MUNICIPAL BENCHMARKS (1-CLICK CIVIC PRESETS)
+# TAB 8: GUJARAT MUNICIPAL BENCHMARKS (1-CLICK CIVIC PRESETS)
 # ──────────────────────────────────────────────────────────────────────────────
-with tab6:
+with tab8:
     st.markdown("### 📍 Gujarat Municipal Case Studies & Presets")
     st.caption("Demonstrating how topography and river morphology alter disaster outcomes across Gujarat")
     
